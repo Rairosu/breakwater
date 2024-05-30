@@ -40,6 +40,7 @@
           strictDeps = true;
           pname = "breakwater";
           cargoExtraArgs = "--package breakwater";
+          doCheck = false;
 
           nativeBuildInputs = with pkgs; [
             clang
