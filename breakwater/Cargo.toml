@@ -30,6 +30,7 @@ snafu.workspace = true
 thread-priority.workspace = true
 tokio.workspace = true
 vncserver = { workspace = true, optional = true }
+winit.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

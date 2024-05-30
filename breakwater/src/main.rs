@@ -5,6 +5,7 @@ use clap::Parser;
 use log::{info, trace};
 use prometheus_exporter::PrometheusExporter;
 use sinks::ffmpeg::FfmpegSink;
+use sinks::display::DisplaySink;
 use snafu::{ResultExt, Snafu};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -147,6 +148,12 @@ async fn main() -> Result<(), Error> {
                 .unwrap();
             Ok::<(), Error>(())
         })
+    });
+
+    let display_sink = DisplaySink::new(fb.clone());
+    let display_thread = tokio::spawn(async move {
+        display_sink.run().await;
+        Ok::<(), Error>(())
     });
 
     #[cfg(feature = "vnc")]
