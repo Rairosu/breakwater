@@ -147,7 +147,7 @@ impl<'a> VncServer<'a> {
                 .blocking_send(StatisticsEvent::FrameRendered)
                 .context(WriteToStatisticsChannelSnafu)?;
 
-            if !self.statistics_information_rx.is_empty() {
+            if false && !self.statistics_information_rx.is_empty() {
                 let statistics_information_event = self
                     .statistics_information_rx
                     .try_recv()
