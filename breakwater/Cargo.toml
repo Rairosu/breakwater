@@ -27,6 +27,7 @@ serde_json.workspace = true
 serde.workspace = true
 simple_moving_average.workspace = true
 snafu.workspace = true
+softbuffer.workspace = true
 thread-priority.workspace = true
 tokio.workspace = true
 vncserver = { workspace = true, optional = true }

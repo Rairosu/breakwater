@@ -150,11 +150,6 @@ async fn main() -> Result<(), Error> {
         })
     });
 
-    let display_sink = DisplaySink::new(fb.clone());
-    let display_thread = tokio::spawn(async move {
-        display_sink.run().await;
-        Ok::<(), Error>(())
-    });
 
     #[cfg(feature = "vnc")]
     let vnc_server_thread = {
@@ -187,9 +182,14 @@ async fn main() -> Result<(), Error> {
     }
     .context(SpawnVncServerThreadSnafu)?;
 
-    tokio::signal::ctrl_c()
-        .await
-        .context(WaitForCtrlCSignalSnafu)?;
+    if true {
+        let display_sink = DisplaySink::new(fb.clone());
+        display_sink.run().await;
+    } else {
+        tokio::signal::ctrl_c()
+            .await
+            .context(WaitForCtrlCSignalSnafu)?;
+    }
 
     prometheus_exporter_thread.abort();
     server_listener_thread.abort();

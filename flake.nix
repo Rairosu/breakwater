@@ -56,9 +56,15 @@
           
           postInstall = ''
             wrapProgram $out/bin/breakwater \
-              --set LD_LIBRARY_PATH ${pkgs.lib.makeLibraryPath [
-                pkgs.libvncserver
-              ]}
+              --prefix PATH : ${pkgs.lib.makeBinPath (with pkgs;[
+                ffmpeg
+              ])} \
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (with pkgs;[
+                libvncserver
+                libxkbcommon
+                vulkan-loader
+                wayland
+              ])}
           '';
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           LIBVNCSERVER_HEADER_FILE = "${pkgs.libvncserver.dev}/include/rfb/rfb.h";
