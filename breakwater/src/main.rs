@@ -182,7 +182,7 @@ async fn main() -> Result<(), Error> {
     }
     .context(SpawnVncServerThreadSnafu)?;
 
-    if true {
+    if false {
         let display_sink = DisplaySink::new(fb.clone());
         display_sink.run().await;
     } else {
