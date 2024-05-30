@@ -43,6 +43,7 @@
 
           nativeBuildInputs = with pkgs; [
             clang
+            makeWrapper
             pkg-config
           ];
           buildInputs = with pkgs; [
@@ -52,8 +53,13 @@
             libvncserver.dev
           ];
           
+          postInstall = ''
+            wrapProgram $out/bin/breakwater \
+              --set LD_LIBRARY_PATH ${pkgs.lib.makeLibraryPath [
+                pkgs.libvncserver
+              ]}
+          '';
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-          # BINDGEN_EXTRA_CLANG_ARGS=;
           LIBVNCSERVER_HEADER_FILE = "${pkgs.libvncserver.dev}/include/rfb/rfb.h";
         };
 
@@ -62,8 +68,16 @@
         };
 
         devShells.default = craneLib.devShell {
-          packages = [];
-          # Additional dev-shell environment variables can be set directly
+          packages = with pkgs; [
+            pkg-config
+            clang
+            libclang
+            libvncserver
+            libvncserver.dev
+          ];
+
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          LIBVNCSERVER_HEADER_FILE = "${pkgs.libvncserver.dev}/include/rfb/rfb.h";
         };
       });
 }
