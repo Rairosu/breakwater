@@ -139,7 +139,7 @@ async fn main() -> Result<(), Error> {
     let statistics_thread = tokio::spawn(async move { statistics.start().await });
     let prometheus_exporter_thread = tokio::spawn(async move { prometheus_exporter.run().await });
 
-    let ffmpeg_sink = FfmpegSink::new(&args, Arc::clone(&fb));
+    let ffmpeg_sink = FfmpegSink::new(&args, fb.clone());
     let ffmpeg_thread = ffmpeg_sink.map(|sink| {
         tokio::spawn(async move {
             sink.run(ffmpeg_terminate_signal_rx)
@@ -182,9 +182,15 @@ async fn main() -> Result<(), Error> {
     }
     .context(SpawnVncServerThreadSnafu)?;
 
-    if false {
-        let display_sink = DisplaySink::new(fb.clone());
-        display_sink.run().await;
+    if true {
+        let (event_loop, mut display_sink) = DisplaySink::new(fb.clone());
+        let event_loop_proxy = event_loop.create_proxy();
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.unwrap();
+            event_loop_proxy.send_event(()).unwrap();
+            Result::<(), ()>::Ok(())
+        });
+        display_sink.run(event_loop);
     } else {
         tokio::signal::ctrl_c()
             .await
