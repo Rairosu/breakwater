@@ -1,10 +1,13 @@
+use std::alloc;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::{cmp::min, net::IpAddr, sync::Arc, time::Duration};
 
 use breakwater_core::framebuffer::FrameBuffer;
+use breakwater_core::CONNECTION_DENIED_TEXT;
 use breakwater_parser::{original::OriginalParser, Parser, ParserError};
-use log::{debug, info};
+use log::{debug, error, info};
+use memadvise::{Advice, MemAdviseError};
 use snafu::{ResultExt, Snafu};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -75,6 +78,10 @@ impl Server {
         let (connection_dropped_tx, mut connection_dropped_rx) =
             mpsc::unbounded_channel::<IpAddr>();
         let connection_dropped_tx = self.max_connections_per_ip.map(|_| connection_dropped_tx);
+
+        let page_size = page_size::get();
+        debug!("System has a page size of {page_size} bytes");
+
         loop {
             let (mut socket, socket_addr) = self
                 .listener
@@ -102,7 +109,14 @@ impl Server {
                 if *current_connections < limit {
                     *current_connections += 1;
                 } else {
-                    // Errors if session is dropped prematurely
+                    self.statistics_tx
+                        .send(StatisticsEvent::ConnectionDenied { ip })
+                        .await
+                        .context(WriteToStatisticsChannelSnafu)?;
+
+                    // Only best effort, it's ok if this message get's missed
+                    let _ = socket.write_all(CONNECTION_DENIED_TEXT).await;
+                    // This can error if a connection is dropped prematurely, which is totally fine
                     let _ = socket.shutdown().await;
                     continue;
                 }
@@ -118,6 +132,7 @@ impl Server {
                     ip,
                     fb_for_thread,
                     statistics_tx_for_thread,
+                    page_size,
                     network_buffer_size,
                     connection_dropped_tx_clone,
                 )
@@ -132,6 +147,7 @@ pub async fn handle_connection(
     ip: IpAddr,
     fb: Arc<FrameBuffer>,
     statistics_tx: mpsc::Sender<StatisticsEvent>,
+    page_size: usize,
     network_buffer_size: usize,
     connection_dropped_tx: Option<mpsc::UnboundedSender<IpAddr>>,
 ) -> Result<(), Error> {
@@ -142,7 +158,21 @@ pub async fn handle_connection(
         .await
         .context(WriteToStatisticsChannelSnafu)?;
 
-    let mut buffer = vec![0u8; network_buffer_size];
+    let layout = alloc::Layout::from_size_align(network_buffer_size, page_size).unwrap();
+    let ptr = unsafe { alloc::alloc(layout) };
+    let buffer = unsafe { std::slice::from_raw_parts_mut(ptr, network_buffer_size) };
+
+    if let Err(err) = memadvise::advise(buffer.as_ptr() as _, buffer.len(), Advice::Sequential) {
+        // [`MemAdviseError`] does not implement Debug...
+        let err = match err {
+            MemAdviseError::NullAddress => "NullAddress",
+            MemAdviseError::InvalidLength => "InvalidLength",
+            MemAdviseError::UnalignedAddress => "UnalignedAddress",
+            MemAdviseError::InvalidRange => "InvalidRange",
+        };
+        error!("Failed to memadvise buffer to kernel, propably having some performance degration: {err}");
+    }
+
     // Number bytes left over **on the first bytes of the buffer** from the previous loop iteration
     let mut leftover_bytes_in_buffer = 0;
 
@@ -235,6 +265,8 @@ pub async fn handle_connection(
         // Will fail if the server thread ends before the client thread
         let _ = tx.send(ip);
     }
+
+    let _ = memadvise::advise(buffer.as_ptr() as _, buffer.len(), Advice::DontNeed);
 
     Ok(())
 }
