@@ -5,7 +5,6 @@ use clap::Parser;
 use log::{info, trace};
 use prometheus_exporter::PrometheusExporter;
 use sinks::ffmpeg::FfmpegSink;
-use sinks::display::DisplaySink;
 use snafu::{ResultExt, Snafu};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -182,8 +181,9 @@ async fn main() -> Result<(), Error> {
     }
     .context(SpawnVncServerThreadSnafu)?;
 
-    if true {
-        let (event_loop, mut display_sink) = DisplaySink::new(fb.clone());
+    #[cfg(feature = "native_display")]
+    {
+        let (event_loop, mut display_sink) = sinks::display::DisplaySink::new(fb.clone());
         let event_loop_proxy = event_loop.create_proxy();
         tokio::spawn(async move {
             tokio::signal::ctrl_c().await.unwrap();
@@ -191,7 +191,9 @@ async fn main() -> Result<(), Error> {
             Result::<(), ()>::Ok(())
         });
         display_sink.run(event_loop);
-    } else {
+    }
+    #[cfg(not(feature = "native_display"))]
+    {
         tokio::signal::ctrl_c()
             .await
             .context(WaitForCtrlCSignalSnafu)?;
